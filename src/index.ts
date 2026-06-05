@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { startLogin, completeLogin } from "./auth.js";
 import { init } from "./tokenManager.js";
-import { proxyMessages } from "./proxy.js";
+import { proxyMessages, proxyOpenAIChat } from "./proxy.js";
 import { logger } from "./logger.js";
 
 dotenv.config();
@@ -61,21 +61,20 @@ app.post("/login/callback", async (req, res) => {
   }
 });
 
-app.post(
-  "/v1/messages",
-  (req, res, next) => {
-    const bearer = req.headers.authorization;
-    const apiKey = req.headers["x-api-key"] as string | undefined;
-    if (bearer === `Bearer ${proxyKey}` || apiKey === proxyKey) {
-      logger.debug("auth", "proxy key verified");
-      next();
-      return;
-    }
-    logger.warn("auth", "unauthorized request rejected");
-    res.status(401).json({ error: "unauthorized" });
-  },
-  proxyMessages,
-);
+function requireProxyKey(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const bearer = req.headers.authorization;
+  const apiKey = req.headers["x-api-key"] as string | undefined;
+  if (bearer === `Bearer ${proxyKey}` || apiKey === proxyKey) {
+    logger.debug("auth", "proxy key verified");
+    next();
+    return;
+  }
+  logger.warn("auth", "unauthorized request rejected");
+  res.status(401).json({ error: "unauthorized" });
+}
+
+app.post("/v1/messages", requireProxyKey, proxyMessages);
+app.post("/v1/chat/completions", requireProxyKey, proxyOpenAIChat);
 
 app.get("/health", (_req, res) => {
   logger.trace("http", "health check");

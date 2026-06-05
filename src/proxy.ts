@@ -10,6 +10,7 @@ import {
 import { logger } from "./logger.js";
 
 const MESSAGES_URL = `${API_BASE_URL}/v1/messages`;
+const CHAT_URL = `${API_BASE_URL}/v1/chat/completions`;
 
 export async function proxyMessages(req: Request, res: Response) {
   if (!isReady()) {
@@ -39,6 +40,19 @@ interface ForwardResult {
   data: any;
   stream?: NodeJS.ReadableStream;
   isStream: boolean;
+}
+
+function ensureBillingSystemOpenAI(body: any): void {
+  if (!Array.isArray(body.messages)) return;
+  const alreadyPresent = body.messages.some(
+    (m: any) =>
+      m.role === "system" &&
+      typeof m.content === "string" &&
+      m.content.includes("x-anthropic-billing-header"),
+  );
+  if (!alreadyPresent) {
+    body.messages.unshift({ role: "system", content: BILLING_HEADER });
+  }
 }
 
 function ensureBillingSystem(body: any): void {
@@ -71,7 +85,6 @@ function ensureBillingSystem(body: any): void {
 }
 
 async function forward(req: Request, token: string): Promise<ForwardResult> {
-  const isStream = Boolean(req.body?.stream);
   ensureBillingSystem(req.body);
 
   const headers: Record<string, string> = {
@@ -82,10 +95,8 @@ async function forward(req: Request, token: string): Promise<ForwardResult> {
     headers["anthropic-version"] = req.headers["anthropic-version"] as string;
   }
 
-  logger.trace("proxy", `POST ${MESSAGES_URL}`, {
-    model: req.body?.model,
-    stream: isStream,
-  });
+  const isStream = Boolean(req.body?.stream);
+  logger.trace("proxy", `POST ${MESSAGES_URL}`, { model: req.body?.model, stream: isStream });
 
   try {
     const upstream = await axios.post(MESSAGES_URL, req.body, {
@@ -117,6 +128,72 @@ async function forward(req: Request, token: string): Promise<ForwardResult> {
       isStream: false,
     };
   }
+}
+
+async function forwardToUrl(url: string, req: Request, token: string): Promise<ForwardResult> {
+  const isStream = Boolean(req.body?.stream);
+
+  const headers: Record<string, string> = {
+    ...getAuthHeaders(token),
+    "content-type": req.headers["content-type"] ?? "application/json",
+  };
+
+  logger.trace("proxy", `POST ${url}`, { model: req.body?.model, stream: isStream });
+
+  try {
+    const upstream = await axios.post(url, req.body, {
+      headers,
+      timeout: 300_000,
+      responseType: isStream ? "stream" : "json",
+    });
+
+    logger.debug("proxy", `upstream responded ${upstream.status}`);
+
+    return {
+      retryAuth: false,
+      status: upstream.status,
+      data: upstream.data,
+      stream: isStream ? upstream.data : undefined,
+      isStream,
+    };
+  } catch (err: any) {
+    if (err.response?.status === 401) {
+      logger.debug("proxy", "upstream returned 401");
+      return { retryAuth: true, status: 401, data: null, isStream: false };
+    }
+    const status = err.response?.status ?? 502;
+    logger.error("proxy", `upstream error ${status}`);
+    return {
+      retryAuth: false,
+      status,
+      data: err.response?.data ?? { error: "upstream request failed" },
+      isStream: false,
+    };
+  }
+}
+
+export async function proxyOpenAIChat(req: Request, res: Response) {
+  if (!isReady()) {
+    logger.warn("proxy", "request rejected — not authenticated");
+    res.status(503).json({ error: "not authenticated — visit GET /login first" });
+    return;
+  }
+
+  logger.debug("proxy", `forwarding openai chat request (stream=${Boolean(req.body?.stream)})`);
+  ensureBillingSystemOpenAI(req.body);
+
+  const token = await getAccessToken();
+  const result = await forwardToUrl(CHAT_URL, req, token);
+
+  if (result.retryAuth) {
+    logger.info("proxy", "401 from upstream — refreshing token and retrying");
+    await refresh();
+    const freshToken = await getAccessToken();
+    sendResponse(res, await forwardToUrl(CHAT_URL, req, freshToken));
+    return;
+  }
+
+  sendResponse(res, result);
 }
 
 function sendResponse(res: Response, result: ForwardResult) {
