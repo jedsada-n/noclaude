@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { startLogin, completeLogin } from "./auth.js";
 import { init } from "./tokenManager.js";
+import { loadTokens } from "./tokenStore.js";
 import { proxyMessages, proxyOpenAIChat } from "./proxy.js";
 import { logger } from "./logger.js";
 
@@ -39,6 +40,14 @@ app.use((req, _res, next) => {
 app.use(express.json({ limit: "10mb" }));
 
 const proxyKey = process.env.NO_CLAUDE_KEY!;
+
+const savedTokens = loadTokens();
+if (savedTokens) {
+  init(savedTokens);
+  logger.info("auth", "restored saved credentials — skipping login");
+} else {
+  logger.info("auth", "no saved credentials found — visit GET /login to authenticate");
+}
 
 app.get("/login", (_req, res) => {
   logger.info("auth", "login flow started");

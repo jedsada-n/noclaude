@@ -7,6 +7,7 @@ import {
   REFRESH_BUFFER_MS,
 } from "./config.js";
 import { logger } from "./logger.js";
+import { saveTokens } from "./tokenStore.js";
 
 let accessToken = "";
 let refreshToken = "";
@@ -23,6 +24,7 @@ export function init(tokens: {
   refreshToken = tokens.refreshToken;
   expiresAt = tokens.expiresAt;
   ready = true;
+  saveTokens(tokens);
   logger.debug("token", "token manager initialized");
 }
 
@@ -76,6 +78,7 @@ async function doRefresh(): Promise<void> {
     accessToken = access_token;
     refreshToken = refresh_token ?? refreshToken;
     expiresAt = Date.now() + expires_in * 1000;
+    saveTokens({ accessToken, refreshToken, expiresAt });
 
     logger.info(
       "token",
