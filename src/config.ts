@@ -8,7 +8,7 @@ export const AUTHORIZE_URL = "https://claude.com/cai/oauth/authorize";
 export const OAUTH_SCOPES = "user:inference";
 export const OAUTH_BETA_HEADER = "oauth-2025-04-20";
 export const REFRESH_BUFFER_MS = 5 * 60 * 1000;
-export const BILLING_HEADER = "x-anthropic-billing-header: cc_version=2.1.133.43c; cc_entrypoint=cli; cch=00000;";
+export const BILLING_HEADER = "x-anthropic-billing-header: cc_version=2.1.300; cc_entrypoint=cli; cch=00000;";
 export const TOKEN_STORE_PATH = resolve(
   process.env.TOKEN_STORE_PATH ?? "./data/tokens.json",
 );
