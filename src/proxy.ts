@@ -12,6 +12,23 @@ import { logger } from "./logger.js";
 const MESSAGES_URL = `${API_BASE_URL}/v1/messages`;
 const CHAT_URL = `${API_BASE_URL}/v1/chat/completions`;
 
+// Some models (e.g. claude-opus-4-8) reject an explicit temperature param and
+// respond 400. Clients that always send temperature would break, so drop it
+// for those models before forwarding.
+const MODELS_WITHOUT_TEMPERATURE = ["opus-4-8"];
+
+function stripUnsupportedParams(body: any): void {
+  if (!body || typeof body !== "object") return;
+  const model = typeof body.model === "string" ? body.model : "";
+  if (
+    "temperature" in body &&
+    MODELS_WITHOUT_TEMPERATURE.some((m) => model.includes(m))
+  ) {
+    delete body.temperature;
+    logger.debug("proxy", `stripped unsupported temperature for model ${model}`);
+  }
+}
+
 export async function proxyMessages(req: Request, res: Response) {
   if (!isReady()) {
     logger.warn("proxy", "request rejected — not authenticated");
@@ -86,6 +103,7 @@ function ensureBillingSystem(body: any): void {
 
 async function forward(req: Request, token: string): Promise<ForwardResult> {
   ensureBillingSystem(req.body);
+  stripUnsupportedParams(req.body);
 
   const headers: Record<string, string> = {
     ...getAuthHeaders(token),
@@ -131,6 +149,8 @@ async function forward(req: Request, token: string): Promise<ForwardResult> {
 }
 
 async function forwardToUrl(url: string, req: Request, token: string): Promise<ForwardResult> {
+  stripUnsupportedParams(req.body);
+
   const isStream = Boolean(req.body?.stream);
 
   const headers: Record<string, string> = {
