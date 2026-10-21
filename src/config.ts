@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { resolve } from "path";
 
 export const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
