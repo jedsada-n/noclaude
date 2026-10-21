@@ -1,7 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import { startLogin, completeLogin } from "./auth.js";
-import { init } from "./tokenManager.js";
+import { init, isReady } from "./tokenManager.js";
 import { loadTokens } from "./tokenStore.js";
 import { proxyMessages, proxyOpenAIChat } from "./proxy.js";
 import { logger } from "./logger.js";
@@ -43,7 +43,7 @@ const proxyKey = process.env.NO_CLAUDE_KEY!;
 
 const savedTokens = loadTokens();
 if (savedTokens) {
-  init(savedTokens);
+  init(savedTokens, false);
   logger.info("auth", "restored saved credentials — skipping login");
 } else {
   logger.info("auth", "no saved credentials found — visit GET /login to authenticate");
@@ -94,5 +94,7 @@ const port = Number(process.env.PORT ?? 3000);
 
 app.listen(port, () => {
   logger.info("server", `listening on :${port}`);
-  logger.info("server", "visit GET /login to authenticate");
+  if (!isReady()) {
+    logger.info("server", "not authenticated — visit GET /login to authenticate");
+  }
 });

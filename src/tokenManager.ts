@@ -15,16 +15,19 @@ let expiresAt = 0;
 let ready = false;
 let refreshPromise: Promise<void> | null = null;
 
-export function init(tokens: {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}) {
+export function init(
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+  },
+  persist = true,
+) {
   accessToken = tokens.accessToken;
   refreshToken = tokens.refreshToken;
   expiresAt = tokens.expiresAt;
   ready = true;
-  saveTokens(tokens);
+  if (persist) saveTokens(tokens);
   logger.debug("token", "token manager initialized");
 }
 
