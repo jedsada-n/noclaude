@@ -53,7 +53,6 @@ export async function completeLogin(
   }
 
   const { codeVerifier, state } = pendingLogin;
-  pendingLogin = null;
 
   const [authorizationCode, returnedState] = raw.split("#");
   if (!authorizationCode) {
@@ -81,6 +80,8 @@ export async function completeLogin(
   );
 
   const { access_token, refresh_token, expires_in } = res.data;
+
+  pendingLogin = null;
 
   logger.info("auth", `token exchange successful — expires in ${expires_in}s`);
 
