@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { startLogin, completeLogin } from "./auth.js";
 import { init, isReady } from "./tokenManager.js";
 import { loadTokens } from "./tokenStore.js";
-import { proxyMessages, proxyOpenAIChat } from "./proxy.js";
+import { proxyMessages, proxyOpenAIChat, proxyModels } from "./proxy.js";
 import { logger } from "./logger.js";
 
 dotenv.config();
@@ -84,6 +84,7 @@ function requireProxyKey(req: express.Request, res: express.Response, next: expr
 
 app.post("/v1/messages", requireProxyKey, proxyMessages);
 app.post("/v1/chat/completions", requireProxyKey, proxyOpenAIChat);
+app.get("/v1/models", requireProxyKey, proxyModels);
 
 app.get("/health", (_req, res) => {
   logger.trace("http", "health check");

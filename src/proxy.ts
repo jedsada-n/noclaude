@@ -11,6 +11,7 @@ import { logger } from "./logger.js";
 
 const MESSAGES_URL = `${API_BASE_URL}/v1/messages`;
 const CHAT_URL = `${API_BASE_URL}/v1/chat/completions`;
+const MODELS_URL = `${API_BASE_URL}/v1/models`;
 
 export async function proxyMessages(req: Request, res: Response) {
   if (!isReady()) {
@@ -194,6 +195,47 @@ export async function proxyOpenAIChat(req: Request, res: Response) {
   }
 
   sendResponse(res, result);
+}
+
+export async function proxyModels(_req: Request, res: Response) {
+  if (!isReady()) {
+    logger.warn("proxy", "request rejected — not authenticated");
+    res.status(503).json({ error: "not authenticated — visit GET /login first" });
+    return;
+  }
+
+  logger.debug("proxy", "forwarding models request");
+  const token = await getAccessToken();
+
+  try {
+    const upstream = await axios.get(MODELS_URL, {
+      headers: getAuthHeaders(token),
+      timeout: 30_000,
+    });
+    logger.debug("proxy", `models responded ${upstream.status}`);
+    res.status(upstream.status).json(upstream.data);
+  } catch (err: any) {
+    if (err.response?.status === 401) {
+      logger.info("proxy", "401 from upstream — refreshing token and retrying");
+      await refresh();
+      const freshToken = await getAccessToken();
+      try {
+        const retry = await axios.get(MODELS_URL, {
+          headers: getAuthHeaders(freshToken),
+          timeout: 30_000,
+        });
+        res.status(retry.status).json(retry.data);
+      } catch (retryErr: any) {
+        const status = retryErr.response?.status ?? 502;
+        logger.error("proxy", `models retry error ${status}`);
+        res.status(status).json(retryErr.response?.data ?? { error: "upstream request failed" });
+      }
+      return;
+    }
+    const status = err.response?.status ?? 502;
+    logger.error("proxy", `models error ${status}`);
+    res.status(status).json(err.response?.data ?? { error: "upstream request failed" });
+  }
 }
 
 function sendResponse(res: Response, result: ForwardResult) {
