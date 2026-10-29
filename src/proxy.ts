@@ -92,9 +92,6 @@ async function forward(req: Request, token: string): Promise<ForwardResult> {
     ...getAuthHeaders(token),
     "content-type": req.headers["content-type"] ?? "application/json",
   };
-  if (req.headers["anthropic-version"]) {
-    headers["anthropic-version"] = req.headers["anthropic-version"] as string;
-  }
 
   const isStream = Boolean(req.body?.stream);
   logger.trace("proxy", `POST ${MESSAGES_URL}`, { model: req.body?.model, stream: isStream });

@@ -47,6 +47,7 @@ export function getAuthHeaders(token: string) {
   return {
     Authorization: `Bearer ${token}`,
     "anthropic-beta": OAUTH_BETA_HEADER,
+    "anthropic-version": "2026-10-21",
   } as const;
 }
 
